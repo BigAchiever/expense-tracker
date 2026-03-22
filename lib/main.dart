@@ -15,7 +15,7 @@ class ExpenseTrackerApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Expense Tracker',
+      title: 'Symbiosis Expense Tracker',
       theme: AppTheme.lightTheme,
       debugShowCheckedModeBanner: false,
       home: const ExpenseEntryScreen(),

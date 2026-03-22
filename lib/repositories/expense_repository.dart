@@ -1,15 +1,17 @@
 import '../models/expense_entry.dart';
+import '../models/school.dart';
 import '../services/sheets_service.dart';
 
 /// Repository for expense data operations.
-/// Provides a clean interface between UI and data layer.
+/// Scoped to a specific [SchoolType]; create a new instance to switch schools.
 class ExpenseRepository {
   final SheetsService _sheetsService;
+  final SchoolType school;
 
-  ExpenseRepository({SheetsService? sheetsService})
-    : _sheetsService = sheetsService ?? SheetsService.instance;
+  ExpenseRepository({required this.school})
+      : _sheetsService = SheetsService(school: school);
 
-  /// Initializes the repository and underlying services.
+  /// Initialises the repository and underlying services.
   Future<void> init() async {
     await _sheetsService.init();
   }
@@ -24,23 +26,18 @@ class ExpenseRepository {
   /// Saves an entry (creates or updates).
   /// Returns the saved entry with updated metadata.
   Future<ExpenseEntry> saveEntry(ExpenseEntry entry) async {
-    // Validate entry
     _validateEntry(entry);
 
     if (entry.existsInSheet) {
-      // Update existing entry
       await _sheetsService.updateEntry(entry);
       return entry;
     } else {
-      // Check if date already exists (prevent duplicates)
       final exists = await _sheetsService.checkDateExists(entry.date);
       if (exists) {
         throw DuplicateEntryException(
           'An entry already exists for this date. Use edit mode instead.',
         );
       }
-
-      // Create new entry
       await _sheetsService.createEntry(entry);
       return entry.copyWith(existsInSheet: true);
     }
@@ -52,19 +49,14 @@ class ExpenseRepository {
   }
 
   /// Gets the previous day's balances for calculations.
-  Future<({double cashInhand})> getPreviousDayBalances(
-    DateTime date,
-  ) async {
+  Future<({double cashInhand})> getPreviousDayBalances(DateTime date) async {
     final previousEntry = await _sheetsService.getPreviousDayEntry(date);
-    if (previousEntry == null) {
-      return (cashInhand: 0.0,);
-    }
-    return (cashInhand: previousEntry.cashInhand,);
+    if (previousEntry == null) return (cashInhand: 0.0);
+    return (cashInhand: previousEntry.cashInhand);
   }
 
   /// Validates an entry before saving.
   void _validateEntry(ExpenseEntry entry) {
-    // Check for negative values
     if (entry.onlineReceiving < 0 ||
         entry.offlineReceiving < 0 ||
         entry.uoloReceiving < 0 ||
@@ -74,7 +66,6 @@ class ExpenseRepository {
       throw ValidationException('Values cannot be negative');
     }
 
-    // Check for date within valid range (Dec 2025 - Dec 2026)
     final minDate = DateTime(2025, 12, 1);
     final maxDate = DateTime(2026, 12, 31);
     if (entry.date.isBefore(minDate) || entry.date.isAfter(maxDate)) {

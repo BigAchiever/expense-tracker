@@ -12,14 +12,20 @@
 library;
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../models/school.dart';
 
 class SheetsConfig {
-  /// The spreadsheet ID from your Google Sheets URL.
-  /// Load from .env file
-  static String get spreadsheetId => dotenv.env['SPREADSHEET_ID']!;
+  /// Returns the spreadsheet ID for the given school.
+  static String spreadsheetIdFor(SchoolType school) {
+    switch (school) {
+      case SchoolType.higher:
+        return dotenv.env['SPREADSHEET_ID_HIGHER']!;
+      case SchoolType.senior:
+        return dotenv.env['SPREADSHEET_ID_SENIOR']!;
+    }
+  }
 
-  /// Service account credentials JSON.
-  /// Load from .env file
+  /// Service account credentials JSON — shared across all schools.
   static String get credentials => dotenv.env['GOOGLE_SHEETS_CREDENTIALS']!;
 
   /// Column indices for the spreadsheet (0-indexed).

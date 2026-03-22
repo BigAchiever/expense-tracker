@@ -3,7 +3,9 @@ import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:screenshot/screenshot.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import '../models/expense_entry.dart';
+import '../models/school.dart';
 import '../repositories/expense_repository.dart';
 import '../theme/app_theme.dart';
 import '../widgets/numeric_input_field.dart';
@@ -17,7 +19,76 @@ class ExpenseEntryScreen extends StatefulWidget {
 }
 
 class _ExpenseEntryScreenState extends State<ExpenseEntryScreen> {
-  final ExpenseRepository _repository = ExpenseRepository();
+  // --- School selection & Persistence ---
+  SchoolType _selectedSchool = SchoolType.higher;
+  late ExpenseRepository _repository;
+  final _storage = const FlutterSecureStorage();
+
+  @override
+  void initState() {
+    super.initState();
+    _repository = ExpenseRepository(school: _selectedSchool); // initial default
+    _initializeAndLoad();
+  }
+
+  Future<void> _initializeAndLoad() async {
+    try {
+      // Load persisted school choice
+      final savedSchoolStr = await _storage.read(key: 'selected_school');
+      if (savedSchoolStr != null) {
+        final savedSchool = SchoolType.values.firstWhere(
+          (s) => s.name == savedSchoolStr,
+          orElse: () => SchoolType.higher,
+        );
+        if (savedSchool != _selectedSchool) {
+          _selectedSchool = savedSchool;
+          _repository = ExpenseRepository(school: _selectedSchool);
+        }
+      }
+
+      // Load persisted language choice
+      final savedLangStr = await _storage.read(key: 'is_english');
+      if (savedLangStr != null) {
+        _isEnglish = savedLangStr == 'true';
+      }
+
+      await _repository.init();
+      await _loadEntry();
+    } catch (e) {
+      setState(() {
+        _errorMessage =
+            _t('Failed to connect: ', 'कनेक्ट करने में विफल: ') + e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
+  /// Switches to a different school, saves preference, and reloads.
+  Future<void> _switchSchool(SchoolType newSchool) async {
+    if (newSchool == _selectedSchool) return;
+
+    // Save preference
+    await _storage.write(key: 'selected_school', value: newSchool.name);
+
+    setState(() {
+      _selectedSchool = newSchool;
+      _repository = ExpenseRepository(school: newSchool);
+      _isLoading = true;
+      _errorMessage = null;
+      _currentStep = 0;
+    });
+    try {
+      await _repository.init();
+      await _loadEntry();
+    } catch (e) {
+      setState(() {
+        _errorMessage =
+            _t('Failed to connect: ', 'कनेक्ट करने में विफल: ') + e.toString();
+        _isLoading = false;
+      });
+    }
+  }
+
   final _formKey = GlobalKey<FormState>();
 
   // Controllers for editable fields
@@ -46,25 +117,6 @@ class _ExpenseEntryScreenState extends State<ExpenseEntryScreen> {
   // Valid date range
   final DateTime _minDate = DateTime(2025, 12, 1);
   final DateTime _maxDate = DateTime(2026, 12, 31);
-
-  @override
-  void initState() {
-    super.initState();
-    _initializeAndLoad();
-  }
-
-  Future<void> _initializeAndLoad() async {
-    try {
-      await _repository.init();
-      await _loadEntry();
-    } catch (e) {
-      setState(() {
-        _errorMessage =
-            _t('Failed to connect: ', 'कनेक्ट करने में विफल: ') + e.toString();
-        _isLoading = false;
-      });
-    }
-  }
 
   Future<void> _loadEntry() async {
     setState(() {
@@ -226,11 +278,64 @@ class _ExpenseEntryScreenState extends State<ExpenseEntryScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(_t('Expense Tracker', 'ख़र्च ट्रैकर')),
+        title: Text(_t('Symbiosis Expense Tracker', 'ख़र्च ट्रैकर')),
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(48),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 12.0),
+            child: Container(
+              height: 40,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: SchoolType.values.map((school) {
+                  final selected = school == _selectedSchool;
+                  return GestureDetector(
+                    onTap: () => _switchSchool(school),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        color: selected ? Colors.white : Colors.transparent,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        _isEnglish ? school.shortLabel : school.displayNameHi,
+                        style: TextStyle(
+                          color: selected
+                              ? AppTheme.primaryColor
+                              : Colors.white,
+                          fontWeight: selected
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                          fontSize: 14,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ),
         actions: [
           IconButton(
             icon: Icon(_isEnglish ? Icons.language : Icons.g_translate),
-            onPressed: () => setState(() => _isEnglish = !_isEnglish),
+            onPressed: () async {
+              final newValue = !_isEnglish;
+              await _storage.write(
+                key: 'is_english',
+                value: newValue.toString(),
+              );
+              setState(() => _isEnglish = newValue);
+            },
             tooltip: _t('Switch Language', 'भाषा बदलें'),
           ),
           if (_currentEntry?.existsInSheet == true && !_isEditMode)
@@ -821,7 +926,8 @@ class _ExpenseEntryScreenState extends State<ExpenseEntryScreen> {
 
   Future<void> _showSuccessSheet() async {
     // First capture the screenshot while the widget is still rendered
-    final ScreenshotController sheetScreenshotController = ScreenshotController();
+    final ScreenshotController sheetScreenshotController =
+        ScreenshotController();
 
     await showModalBottomSheet(
       context: context,
@@ -865,16 +971,26 @@ class _ExpenseEntryScreenState extends State<ExpenseEntryScreen> {
                       color: AppTheme.successColor,
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.check, color: Colors.white, size: 40),
+                    child: const Icon(
+                      Icons.check,
+                      color: Colors.white,
+                      size: 40,
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Text(
                     _t('Fees Submitted!', 'फीस जमा हो गई!'),
-                    style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    _t('Your daily record has been saved.', 'आपका दैनिक रिकॉर्ड सहेज लिया गया है।'),
+                    _t(
+                      'Your daily record has been saved.',
+                      'आपका दैनिक रिकॉर्ड सहेज लिया गया है।',
+                    ),
                     style: TextStyle(color: AppTheme.textSecondary),
                   ),
                   const SizedBox(height: 20),
@@ -893,21 +1009,26 @@ class _ExpenseEntryScreenState extends State<ExpenseEntryScreen> {
                     width: double.infinity,
                     child: ElevatedButton.icon(
                       icon: const Icon(Icons.share),
-                      label: Text(_t('Share on WhatsApp', 'WhatsApp पर शेयर करें')),
+                      label: Text(
+                        _t('Share on WhatsApp', 'WhatsApp पर शेयर करें'),
+                      ),
                       onPressed: () async {
                         try {
-                          final directory = (await getApplicationDocumentsDirectory()).path;
-                          final fileName = 'Expense_${DateFormat('dd-MMM-yyyy').format(_selectedDate)}.png';
-                          final imagePath = await sheetController.captureAndSave(
-                            directory,
-                            fileName: fileName,
-                          );
+                          final directory =
+                              (await getApplicationDocumentsDirectory()).path;
+                          final fileName =
+                              'Expense_${DateFormat('dd-MMM-yyyy').format(_selectedDate)}.png';
+                          final imagePath = await sheetController
+                              .captureAndSave(directory, fileName: fileName);
                           if (imagePath != null) {
                             await SharePlus.instance.share(
                               ShareParams(
                                 files: [XFile(imagePath)],
-                                text: _t('Expense Summary: ', 'खर्च सारांश: ') +
-                                    DateFormat('dd-MMM-yyyy').format(_selectedDate),
+                                text:
+                                    _t('Expense Summary: ', 'खर्च सारांश: ') +
+                                    DateFormat(
+                                      'dd-MMM-yyyy',
+                                    ).format(_selectedDate),
                               ),
                             );
                           }
