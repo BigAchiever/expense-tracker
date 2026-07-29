@@ -1,0 +1,59 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-50: #eff6ff;
+  --color-brand-100: #dbeafe;
+  --color-brand-200: #bfdbfe;
+  --color-brand-500: #3b82f6;
+  --color-brand-600: #2563eb;
+  --color-brand-700: #1d4ed8;
+
+  --color-income: #10b981;
+  --color-income-soft: #ecfdf5;
+  --color-spend: #ef4444;
+  --color-spend-soft: #fef2f2;
+  --color-accent: #6366f1;
+  --color-accent-soft: #eef2ff;
+  --color-warn: #b45309;
+  --color-warn-soft: #fffbeb;
+
+  --color-ink: #0f172a;
+  --color-ink-soft: #64748b;
+  --color-hairline: #e2e8f0;
+  --color-canvas: #f1f5f9;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Money inputs: kill the spinner arrows, they are a menace on touch. */
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+input[type="number"] {
+  -moz-appearance: textfield;
+}
+
+/* Digits line up in columns. */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
