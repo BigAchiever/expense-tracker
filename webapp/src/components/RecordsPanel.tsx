@@ -271,7 +271,7 @@ function Unlocked({ school, date, records }: { school: School; date: string; rec
               <Line label={t("Principal / Director", "प्रिंसिपल / डायरेक्टर")} value={records.totals.principalReceiving} />
             ) : null}
             <div className="!mt-2 border-t border-hairline pt-2">
-              <Line label={t("Non-cash (online)", "बिना नकद (ऑनलाइन)")} value={records.totals.onlineReceiving} muted />
+              <Line label={t("Online (Paytm / UPI)", "ऑनलाइन (Paytm / UPI)")} value={records.totals.onlineReceiving} muted />
               <Line label={t("Cash", "नकद")} value={records.totals.cashReceived} muted />
             </div>
           </div>
@@ -370,7 +370,7 @@ function Unlocked({ school, date, records }: { school: School; date: string; rec
                         <Line label={t("Principal / Director", "प्रिंसिपल / डायरेक्टर")} value={entry.principalReceiving} />
                       ) : null}
                       {entry.onlineReceiving > 0 ? (
-                        <Line label={t("Non-cash (online)", "बिना नकद (ऑनलाइन)")} value={entry.onlineReceiving} muted />
+                        <Line label={t("Online (Paytm / UPI)", "ऑनलाइन (Paytm / UPI)")} value={entry.onlineReceiving} muted />
                       ) : null}
                       {entry.bankDeposit > 0 ? (
                         <Line
