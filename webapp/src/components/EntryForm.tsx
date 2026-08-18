@@ -564,16 +564,20 @@ export function EntryForm({
         {/* No card chrome here — the placeholders say what these are, and the
             saved height keeps the whole form on one screen. */}
         <div className="grid grid-cols-2 gap-2">
-          <input
-            type="text"
+          <select
             value={enteredBy}
             onChange={(e) => setTypedName(e.target.value)}
             aria-label={t("Your name", "आपका नाम")}
-            placeholder={t("Your name", "आपका नाम")}
-            className={`min-w-0 rounded-lg border bg-white px-2.5 py-2 text-base shadow-sm outline-none focus:border-brand-600 placeholder:text-slate-400 ${
-              showIssues && !enteredBy.trim() ? "border-spend" : "border-hairline"
+            className={`min-w-0 rounded-lg border bg-white px-2.5 py-2 text-base shadow-sm outline-none focus:border-brand-600 ${
+              showIssues && !enteredBy.trim() ? "border-spend text-slate-400" : "border-hairline text-ink"
             }`}
-          />
+          >
+            <option value="" disabled>
+              {t("Select name", "नाम चुनें")}
+            </option>
+            <option value="Shweta">Shweta</option>
+            <option value="Anvita">Anvita</option>
+          </select>
           <input
             type="text"
             value={note}
