@@ -260,20 +260,106 @@ function Unlocked({ school, date, records }: { school: School; date: string; rec
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <div className="rounded-2xl border border-hairline bg-white p-4 shadow-sm">
+        <div className="rounded-2xl border border-hairline bg-white p-5 shadow-sm">
           <h3 className="text-sm font-bold uppercase tracking-wide text-ink-soft">
-            {t("Where the money came from", "पैसा कहाँ से आया")}
+            {t("Monthly Cash Reconciliation", "मासिक नकद मिलान")}
           </h3>
-          <div className="mt-2 space-y-1">
-            <Line label={t("Uolo fees", "Uolo फीस")} value={records.totals.uoloReceiving} />
-            <Line label={t("Offline fees (receipt)", "ऑफ़लाइन फीस (रसीद)")} value={records.totals.offlineReceiving} />
-            {records.totals.principalReceiving > 0 ? (
-              <Line label={t("Principal / Director", "प्रिंसिपल / डायरेक्टर")} value={records.totals.principalReceiving} />
-            ) : null}
-            <div className="!mt-2 border-t border-hairline pt-2">
-              <Line label={t("Online (Paytm / UPI)", "ऑनलाइन (Paytm / UPI)")} value={records.totals.onlineReceiving} muted />
-              <Line label={t("Cash", "नकद")} value={records.totals.cashReceived} muted />
+          <p className="mt-1 text-xs text-ink-soft">
+            {t("How the cash handed over figure is calculated from collections, online payments, and expenses.", "वसूली, ऑनलाइन भुगतान और खर्चों से हाथ में बचे नकद की गणना कैसे की जाती है।")}
+          </p>
+
+          <div className="mt-4 space-y-3.5">
+            {/* Step 1: Total Received */}
+            <div className="border-b border-hairline/60 pb-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-semibold text-ink">{t("1. Total Fees Collected", "1. कुल फीस वसूली")}</p>
+                <span className="tnum text-sm font-bold text-income">
+                  +{rupees(records.totals.totalReceiving)}
+                </span>
+              </div>
+              <div className="mt-1.5 grid grid-cols-3 gap-2 pl-4 text-xs text-ink-soft">
+                <div>
+                  <span>{t("Uolo", "Uolo")}</span>
+                  <p className="tnum font-semibold text-ink">{rupees(records.totals.uoloReceiving)}</p>
+                </div>
+                <div>
+                  <span>{t("Offline", "ऑफ़लाइन")}</span>
+                  <p className="tnum font-semibold text-ink">{rupees(records.totals.offlineReceiving)}</p>
+                </div>
+                {records.totals.principalReceiving > 0 ? (
+                  <div>
+                    <span>{t("Principal", "प्रिंसिपल")}</span>
+                    <p className="tnum font-semibold text-ink">{rupees(records.totals.principalReceiving)}</p>
+                  </div>
+                ) : null}
+              </div>
             </div>
+
+            {/* Step 2: Minus Online */}
+            <div className="flex items-center justify-between border-b border-hairline/60 pb-3">
+              <div>
+                <p className="text-sm font-semibold text-ink">{t("2. Minus Online Payments", "2. घटाएं: ऑनलाइन भुगतान")}</p>
+                <p className="text-[11px] text-ink-soft">
+                  {t("Paytm, UPI, online (never became cash)", "Paytm, UPI, ऑनलाइन (जो नकद नहीं बना)")}
+                </p>
+              </div>
+              <span className="tnum text-sm font-bold text-spend">
+                −{rupees(records.totals.onlineReceiving)}
+              </span>
+            </div>
+
+            {/* Subtotal: Physical Cash Received */}
+            <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-xl border border-hairline/40">
+              <div>
+                <p className="text-xs font-bold text-brand-700">{t("= Physical Cash Collected", "= प्राप्त कुल नकद")}</p>
+                <p className="text-[10px] text-ink-soft">{t("Cash box income", "कैश बॉक्स में आया पैसा")}</p>
+              </div>
+              <span className="tnum text-sm font-bold text-brand-700">
+                {rupees(records.totals.cashReceived)}
+              </span>
+            </div>
+
+            {/* Step 3: Outflow (Expenses + Bank Deposit) */}
+            <div className="space-y-2 border-b border-hairline/60 pb-3 pt-1">
+              <p className="text-[11px] font-bold uppercase text-ink-soft tracking-wider">{t("Minus Outflow from Cash Box", "कैश बॉक्स से गया पैसा")}</p>
+              
+              <div className="flex items-center justify-between text-sm pl-4">
+                <span className="text-ink-soft">{t("Bank Deposits", "बैंक जमा")}</span>
+                <span className="tnum font-semibold text-ink-soft">−{rupees(records.totals.bankDeposit)}</span>
+              </div>
+
+              <div className="flex items-center justify-between text-sm pl-4">
+                <span className="text-ink-soft">{t("Cash Expenses", "नकद खर्च")}</span>
+                <span className="tnum font-semibold text-ink-soft">−{rupees(records.totals.cashExpense)}</span>
+              </div>
+            </div>
+
+            {/* Final Total: Cash Handed Over */}
+            <div className="flex items-center justify-between bg-brand-50 p-3 rounded-xl border border-brand-100">
+              <div>
+                <p className="text-xs font-bold text-brand-800">{t("= Net Cash Position", "= कुल नकद स्थिति")}</p>
+                <p className="text-[10px] text-brand-650">{t("Net cash from all days combined", "सभी दिनों का मिलाकर कुल नकद")}</p>
+              </div>
+              <span className={`tnum text-base font-bold ${records.totals.cashInHand < 0 ? "text-spend" : "text-brand-700"}`}>
+                {rupees(records.totals.cashInHand)}
+              </span>
+            </div>
+
+            {/* Handed Over vs Brought In breakdown */}
+            {records.totals.broughtInFromOutside > 0 ? (
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className="rounded-xl border border-income/20 bg-income-soft/50 p-2.5 text-center">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-income">{t("Cash Handed Over", "दिया गया नकद")}</span>
+                  <p className="tnum mt-0.5 text-sm font-bold text-income">+{rupees(records.totals.cashHandedOver)}</p>
+                  <p className="text-[9px] text-income/80">{t("Surplus days total", "बचत वाले दिन")}</p>
+                </div>
+                <div className="rounded-xl border border-spend/20 bg-spend-soft/50 p-2.5 text-center">
+                  <span className="text-[9px] font-bold uppercase tracking-wider text-spend">{t("Brought In", "लाया गया नकद")}</span>
+                  <p className="tnum mt-0.5 text-sm font-bold text-spend">−{rupees(records.totals.broughtInFromOutside)}</p>
+                  <p className="text-[9px] text-spend/80">{t("To cover deficit days", "घाटे वाले दिन")}</p>
+                </div>
+              </div>
+            ) : null}
           </div>
         </div>
 
