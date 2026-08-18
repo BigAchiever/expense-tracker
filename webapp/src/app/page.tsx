@@ -40,25 +40,28 @@ export default async function Page(props: PageProps<"/">) {
 
       const unlocked = await recordsUnlocked();
 
-      // Every figure on the form is derived from that one day, so nothing here
-      // leaks past data — only the Records section below needs the password.
-      entry = await getEntry(school.id, date);
-
       const rawMonth = typeof params.month === "string" ? params.month : "";
       const month = isValidISOMonth(rawMonth) ? rawMonth : monthOf(date);
 
-      records = unlocked
-        ? await (async () => {
-            const view = await getMonth(school.id, month);
-            return {
-              month: view.month,
-              schoolId: school.id,
-              rows: view.rows,
-              totals: view.totals,
-              missingDays: view.missingDays,
-              byCategory: expensesByCategory(view.rows.map((r) => r.entry)),
-            };
-          })()
+      // Fetch daily entry and monthly records in parallel, passing the active school object
+      // to prevent redundant fetch queries inside getMonth()
+      const entryPromise = getEntry(school.id, date);
+      const recordsPromise = unlocked
+        ? getMonth(school.id, month, school)
+        : Promise.resolve(null);
+
+      const [entryResult, view] = await Promise.all([entryPromise, recordsPromise]);
+      entry = entryResult;
+
+      records = view
+        ? {
+            month: view.month,
+            schoolId: school.id,
+            rows: view.rows,
+            totals: view.totals,
+            missingDays: view.missingDays,
+            byCategory: expensesByCategory(view.rows.map((r) => r.entry)),
+          }
         : null;
     }
   } catch (error) {

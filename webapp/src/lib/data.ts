@@ -120,8 +120,8 @@ export interface MonthView {
   missingDays: string[];
 }
 
-export async function getMonth(schoolId: string, month: string): Promise<MonthView> {
-  const school = await getSchool(schoolId);
+export async function getMonth(schoolId: string, month: string, schoolOverride?: School): Promise<MonthView> {
+  const school = schoolOverride ?? (await getSchool(schoolId));
   if (!school) throw new Error("School not found");
 
   const { start, end } = monthRange(month);
