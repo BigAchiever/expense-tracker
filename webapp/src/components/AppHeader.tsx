@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect } from "react";
 import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useT } from "@/lib/i18n";
-import { formatDateLong } from "@/lib/format";
+import { formatDateLong, todayISO } from "@/lib/format";
 import { LangToggle } from "./LangProvider";
 
 interface AppHeaderProps {
@@ -13,6 +15,26 @@ interface AppHeaderProps {
 
 export function AppHeader({ activeTab, schoolId, date }: AppHeaderProps) {
   const t = useT();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  useEffect(() => {
+    // Detect new tab session. If active, do not override user navigation.
+    const sessionActive = sessionStorage.getItem("sxm_session_active");
+    if (!sessionActive) {
+      sessionStorage.setItem("sxm_session_active", "true");
+      
+      const dateParam = searchParams.get("date");
+      const today = todayISO();
+      
+      if (dateParam && dateParam !== today) {
+        // Redirect fresh visits with old dates to today's date
+        const newParams = new URLSearchParams(searchParams.toString());
+        newParams.set("date", today);
+        router.replace(`${window.location.pathname}?${newParams.toString()}`);
+      }
+    }
+  }, [searchParams, router]);
 
   return (
     <header className="sticky top-0 z-30 w-full border-b border-slate-800 bg-slate-950/95 text-slate-100 shadow-lg backdrop-blur-md">
