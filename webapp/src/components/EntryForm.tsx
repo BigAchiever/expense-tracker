@@ -163,7 +163,9 @@ export function EntryForm({
 
   const goTo = (nextDate: string, nextSchool = school.id) => {
     setSaved(false);
-    router.push(`/?date=${nextDate}&school=${nextSchool}`);
+    startTransition(() => {
+      router.push(`/?date=${nextDate}&school=${nextSchool}`);
+    });
   };
 
   const shiftDate = (delta: number) => {
@@ -370,8 +372,13 @@ export function EntryForm({
 
   return (
     <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_18rem] lg:items-start">
+      {pending && (
+        <div className="fixed top-0 left-0 right-0 z-50 h-1 overflow-hidden bg-brand-100/50">
+          <div className="h-full w-full bg-brand-600 origin-left animate-loading-bar" />
+        </div>
+      )}
       {/* ---------------- the form ---------------- */}
-      <div className="space-y-2">
+      <div className={`space-y-2 transition-opacity duration-250 ${pending ? "opacity-70 pointer-events-none" : ""}`}>
         {/* school + date, one compact strip */}
         <div className="rounded-xl border border-hairline bg-white p-2 shadow-sm">
           {/* Two rows on a phone, one on anything wider — never overflows. */}
@@ -381,10 +388,11 @@ export function EntryForm({
                 <button
                   key={s.id}
                   type="button"
+                  disabled={pending}
                   onClick={() => goTo(date, s.id)}
                   className={`rounded-md px-2.5 py-1.5 text-[13px] font-semibold transition ${
                     s.id === school.id ? "bg-white text-brand-700 shadow-sm" : "text-ink-soft"
-                  }`}
+                  } ${pending ? "cursor-not-allowed" : ""}`}
                 >
                   {s.code === "higher" ? t("Higher", "उच्च") : t("Senior", "वरिष्ठ")}
                 </button>
@@ -395,6 +403,7 @@ export function EntryForm({
               <input
                 type="checkbox"
                 checked={noActivity}
+                disabled={pending}
                 onChange={(e) => setNoActivity(e.target.checked)}
                 className="h-4 w-4 accent-brand-600"
               />
@@ -405,8 +414,9 @@ export function EntryForm({
               <button
                 type="button"
                 onClick={() => shiftDate(-1)}
+                disabled={pending}
                 aria-label={t("Previous day", "पिछला दिन")}
-                className="shrink-0 rounded-lg border border-hairline px-2.5 py-1.5 text-ink-soft transition hover:bg-slate-50"
+                className="shrink-0 rounded-lg border border-hairline px-2.5 py-1.5 text-ink-soft transition hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 ‹
               </button>
@@ -414,16 +424,17 @@ export function EntryForm({
                 type="date"
                 value={date}
                 max={todayISO()}
+                disabled={pending}
                 aria-label={t("Which day are you filling?", "आप कौन सा दिन भर रहे हैं?")}
                 onChange={(e) => e.target.value && goTo(e.target.value)}
-                className="tnum min-w-0 flex-1 rounded-lg border border-hairline px-2 py-1.5 text-center text-[13px] font-semibold outline-none focus:border-brand-600"
+                className="tnum min-w-0 flex-1 rounded-lg border border-hairline px-2 py-1.5 text-center text-[13px] font-semibold outline-none focus:border-brand-600 disabled:opacity-50 disabled:cursor-not-allowed"
               />
               <button
                 type="button"
                 onClick={() => shiftDate(1)}
-                disabled={date >= todayISO()}
+                disabled={pending || date >= todayISO()}
                 aria-label={t("Next day", "अगला दिन")}
-                className="shrink-0 rounded-lg border border-hairline px-2.5 py-1.5 text-ink-soft transition hover:bg-slate-50 disabled:opacity-30"
+                className="shrink-0 rounded-lg border border-hairline px-2.5 py-1.5 text-ink-soft transition hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed"
               >
                 ›
               </button>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useMemo, useState } from "react";
+import { useActionState, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { DayTotals, PeriodTotals } from "@/lib/calc";
 import { addMonths, formatDate, formatMonth, formatWeekday, rupees } from "@/lib/format";
@@ -143,6 +143,7 @@ function Unlocked({ school, date, records }: { school: School; date: string; rec
   const { lang } = useLang();
   const router = useRouter();
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
 
   const schoolName = lang === "hi" ? school.name_hi : school.name;
 
@@ -150,7 +151,9 @@ function Unlocked({ school, date, records }: { school: School; date: string; rec
   // today, which flipped the OnePage remount key: the teacher's half-filled
   // form was wiped and silently repointed at a different day.
   const goMonth = (month: string) =>
-    router.push(`/?date=${date}&school=${school.id}&month=${month}#records`);
+    startTransition(() => {
+      router.push(`/?date=${date}&school=${school.id}&month=${month}#records`);
+    });
 
   const shareText = useMemo(
     () =>
@@ -191,21 +194,23 @@ function Unlocked({ school, date, records }: { school: School; date: string; rec
       </div>
 
       {/* Month picker */}
-      <div className="flex items-center gap-2 rounded-2xl border border-hairline bg-white p-3 shadow-sm">
+      <div className={`flex items-center gap-2 rounded-2xl border border-hairline bg-white p-3 shadow-sm transition-opacity duration-250 ${pending ? "opacity-60 pointer-events-none" : ""}`}>
         <button
           type="button"
+          disabled={pending}
           onClick={() => goMonth(addMonths(records.month, -1))}
           aria-label={t("Previous month", "पिछला महीना")}
-          className="rounded-lg border border-hairline px-3 py-2 text-ink-soft transition hover:bg-slate-50"
+          className="rounded-lg border border-hairline px-3 py-2 text-ink-soft transition hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed"
         >
           ‹
         </button>
         <p className="flex-1 text-center text-base font-bold text-ink">{formatMonth(records.month)}</p>
         <button
           type="button"
+          disabled={pending}
           onClick={() => goMonth(addMonths(records.month, 1))}
           aria-label={t("Next month", "अगला महीना")}
-          className="rounded-lg border border-hairline px-3 py-2 text-ink-soft transition hover:bg-slate-50"
+          className="rounded-lg border border-hairline px-3 py-2 text-ink-soft transition hover:bg-slate-50 disabled:opacity-30 disabled:cursor-not-allowed"
         >
           ›
         </button>
