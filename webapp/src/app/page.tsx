@@ -97,6 +97,7 @@ export default async function Page(props: PageProps<"/">) {
       
       <main className="mx-auto w-full max-w-5xl flex-1 px-3 pb-32 pt-3 lg:pb-8">
         <EntryForm
+          key={`${activeSchool.id}:${date}`}
           schools={schools}
           school={activeSchool}
           date={date}
