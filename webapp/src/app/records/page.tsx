@@ -1,17 +1,20 @@
-import { getEntry, getSchools } from "@/lib/data";
-import { isFuture, isValidISODate, todayISO } from "@/lib/format";
+import { recordsPasswordIsSet, recordsUnlocked } from "@/lib/auth";
+import { expensesByCategory } from "@/lib/calc";
+import { getMonth, getSchools } from "@/lib/data";
+import { isValidISODate, isValidISOMonth, monthOf, todayISO } from "@/lib/format";
 import { isConfigured } from "@/lib/supabase";
 import { AppHeader } from "@/components/AppHeader";
-import { EntryForm } from "@/components/EntryForm";
+import { RecordsPanel } from "@/components/RecordsPanel";
 import { SetupNotice } from "@/components/SetupNotice";
-import type { School, DayEntry } from "@/lib/types";
+import type { School } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-/**
- * The daily entry form page.
- */
-export default async function Page(props: PageProps<"/">) {
+interface RecordsPageProps {
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+export default async function RecordsPage(props: RecordsPageProps) {
   if (!isConfigured()) return <SetupNotice />;
 
   const params = await props.searchParams;
@@ -19,7 +22,7 @@ export default async function Page(props: PageProps<"/">) {
   let schools: School[] = [];
   let school: School | undefined;
   let date = "";
-  let entry: DayEntry | null = null;
+  let records = null;
   let dbError: unknown = null;
 
   try {
@@ -30,12 +33,25 @@ export default async function Page(props: PageProps<"/">) {
       school = schools.find((s) => s.id === requested) ?? schools[0];
 
       const rawDate = typeof params.date === "string" ? params.date : "";
-      // Calendar-checked, not just shape-checked: "2026-02-31" matches the regex
-      // but Postgres rejects it, which used to crash the page into the boundary.
-      date = isValidISODate(rawDate) && !isFuture(rawDate) ? rawDate : todayISO();
+      // Validate date or default to today
+      date = isValidISODate(rawDate) ? rawDate : todayISO();
 
-      // Fetch daily entry detail
-      entry = await getEntry(school.id, date);
+      const unlocked = await recordsUnlocked();
+
+      const rawMonth = typeof params.month === "string" ? params.month : "";
+      const month = isValidISOMonth(rawMonth) ? rawMonth : monthOf(date);
+
+      const view = unlocked ? await getMonth(school.id, month, school) : null;
+      records = view
+        ? {
+            month: view.month,
+            schoolId: school.id,
+            rows: view.rows,
+            totals: view.totals,
+            missingDays: view.missingDays,
+            byCategory: expensesByCategory(view.rows.map((r) => r.entry)),
+          }
+        : null;
     }
   } catch (error) {
     dbError = error;
@@ -43,7 +59,7 @@ export default async function Page(props: PageProps<"/">) {
 
   // Handle database connection/fetching errors
   if (dbError) {
-    console.error("Database connection/fetch failed during page render:", dbError);
+    console.error("Database connection/fetch failed during records render:", dbError);
     const errMessage = dbError instanceof Error ? dbError.message : String(dbError);
     const isFetchFailed = errMessage.toLowerCase().includes("fetch failed") || errMessage.toLowerCase().includes("enotfound");
 
@@ -93,14 +109,14 @@ export default async function Page(props: PageProps<"/">) {
 
   return (
     <div className="flex min-h-full flex-col">
-      <AppHeader activeTab="entry" schoolId={activeSchool.id} date={date} />
+      <AppHeader activeTab="records" schoolId={activeSchool.id} date={date} />
       
-      <main className="mx-auto w-full max-w-5xl flex-1 px-3 pb-32 pt-3 lg:pb-8">
-        <EntryForm
-          schools={schools}
+      <main className="mx-auto w-full max-w-5xl flex-1 px-3 pb-16 pt-3 lg:pb-8">
+        <RecordsPanel
           school={activeSchool}
           date={date}
-          entry={entry}
+          records={records}
+          configured={recordsPasswordIsSet()}
         />
       </main>
     </div>
