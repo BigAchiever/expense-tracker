@@ -462,62 +462,120 @@ function Unlocked({
                     type="button"
                     onClick={() => setExpanded(open ? null : entry.entryDate)}
                     aria-expanded={open}
-                    className="flex w-full items-center gap-3 px-4 py-3 text-left transition hover:bg-slate-50"
+                    className="flex w-full flex-col gap-2 px-4 py-3 text-left transition hover:bg-slate-50 sm:flex-row sm:items-center sm:gap-3"
                   >
-                    <div className="w-14 shrink-0">
+                    <div className="flex items-center justify-between sm:w-20 sm:shrink-0 sm:flex-col sm:items-start">
                       <p className="tnum text-sm font-bold text-ink">{formatDate(entry.entryDate).slice(0, 6)}</p>
                       <p className="text-[11px] text-ink-soft">{formatWeekday(entry.entryDate)}</p>
                     </div>
 
                     {entry.noActivity ? (
-                      <p className="flex-1 text-sm italic text-ink-soft">{t("No activity", "कोई गतिविधि नहीं")}</p>
+                      <p className="flex-1 text-sm italic text-ink-soft">{t("No activity (Holiday)", "कोई गतिविधि नहीं (छुट्टी)")}</p>
                     ) : (
-                      <div className="flex flex-1 items-baseline gap-3">
-                        <span className="tnum text-sm font-semibold text-income">
-                          +{rupees(totals.totalReceiving)}
+                      <div className="flex flex-1 flex-wrap items-center gap-1.5 text-xs">
+                        <span className="tnum font-bold text-income bg-income-soft/60 px-2 py-0.5 rounded-md border border-income/20">
+                          +{rupees(totals.totalReceiving)} {t("Total", "कुल")}
                         </span>
-                        {totals.totalExpense > 0 ? (
-                          <span className="tnum text-sm text-spend">−{rupees(totals.totalExpense)}</span>
+
+                        {totals.onlineReceiving > 0 ? (
+                          <span className="tnum text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+                            {t("Online", "ऑनलाइन")}: {rupees(totals.onlineReceiving)}
+                          </span>
+                        ) : null}
+
+                        {totals.bankDeposit > 0 ? (
+                          <span className="tnum text-brand-700 bg-brand-50 px-2 py-0.5 rounded-md border border-brand-100">
+                            {t("Bank", "बैंक")}: −{rupees(totals.bankDeposit)}
+                          </span>
+                        ) : null}
+
+                        {totals.cashExpense > 0 ? (
+                          <span className="tnum text-spend bg-spend-soft/60 px-2 py-0.5 rounded-md border border-spend/20">
+                            {t("Expense", "खर्च")}: −{rupees(totals.cashExpense)}
+                          </span>
                         ) : null}
                       </div>
                     )}
 
                     <div className="shrink-0 text-right">
-                      <p className={`tnum text-sm font-bold ${totals.cashInHand < 0 ? "text-spend" : "text-ink"}`}>
+                      <p className={`tnum text-base font-black ${totals.cashInHand < 0 ? "text-spend" : "text-brand-700"}`}>
                         {rupees(totals.cashInHand)}
                       </p>
-                      <p className="text-[11px] text-ink-soft">
-                        {totals.cashInHand < 0 ? t("from outside", "बाहर से") : t("handed over", "दिया गया")}
+                      <p className="text-[10px] uppercase tracking-wider font-semibold text-ink-soft">
+                        {totals.cashInHand < 0 ? t("from outside", "बाहर से") : t("handed over", "दिया गया नकद")}
                       </p>
                     </div>
                   </button>
 
                   {open ? (
-                    <div className="space-y-2 bg-slate-50 px-4 pb-4 pt-1">
-                      <Line label={t("Uolo fees", "Uolo फीस")} value={entry.uoloReceiving} />
-                      <Line label={t("Offline fees", "ऑफ़लाइन फीस")} value={entry.offlineReceiving} />
-                      {entry.principalReceiving > 0 ? (
-                        <Line label={t("Principal / Director", "प्रिंसिपल / डायरेक्टर")} value={entry.principalReceiving} />
-                      ) : null}
-                      {entry.onlineReceiving > 0 ? (
-                        <Line label={t("Online (Paytm / UPI)", "ऑनलाइन (Paytm / UPI)")} value={entry.onlineReceiving} muted />
-                      ) : null}
-                      {entry.bankDeposit > 0 ? (
-                        <Line
-                          label={`${t("Bank deposit", "बैंक जमा")}${entry.bankReference ? ` (${entry.bankReference})` : ""}`}
-                          value={entry.bankDeposit}
-                        />
-                      ) : null}
+                    <div className="space-y-3 bg-slate-50 px-4 pb-4 pt-3 border-t border-hairline/60">
+                      {/* Breakdown header */}
+                      <div className="rounded-xl border border-hairline bg-white p-3.5 space-y-2">
+                        <p className="text-xs font-bold uppercase tracking-wide text-ink-soft">
+                          {t("Day Cash Flow Calculation", "दैनिक नकद मिलान")}
+                        </p>
+
+                        <div className="space-y-1.5 text-xs">
+                          <div className="flex justify-between border-b border-hairline/40 pb-1.5">
+                            <span className="text-ink-soft">{t("Total Collection (Uolo + Offline)", "कुल वसूली (Uolo + ऑफ़लाइन)")}</span>
+                            <span className="tnum font-bold text-income">+{rupees(totals.totalReceiving)}</span>
+                          </div>
+
+                          {entry.onlineReceiving > 0 ? (
+                            <div className="flex justify-between border-b border-hairline/40 pb-1.5">
+                              <span className="text-ink-soft">{t("Minus Online (Paytm / UPI)", "घटाएं: ऑनलाइन (Paytm / UPI)")}</span>
+                              <span className="tnum font-bold text-spend">−{rupees(entry.onlineReceiving)}</span>
+                            </div>
+                          ) : null}
+
+                          <div className="flex justify-between bg-slate-50 px-2 py-1 rounded font-semibold text-brand-700">
+                            <span>{t("= Cash in Box", "= प्राप्त नकद")}</span>
+                            <span className="tnum">{rupees(totals.cashReceived)}</span>
+                          </div>
+
+                          {entry.bankDeposit > 0 ? (
+                            <div className="flex justify-between border-b border-hairline/40 pb-1.5">
+                              <span className="text-ink-soft">
+                                {t("Minus Bank Deposit", "घटाएं: बैंक जमा")}
+                                {entry.bankReference ? ` (${entry.bankReference})` : ""}
+                              </span>
+                              <span className="tnum font-semibold text-ink-soft">−{rupees(entry.bankDeposit)}</span>
+                            </div>
+                          ) : null}
+
+                          {totals.cashExpense > 0 ? (
+                            <div className="flex justify-between border-b border-hairline/40 pb-1.5">
+                              <span className="text-ink-soft">{t("Minus Cash Expenses", "घटाएं: नकद खर्च")}</span>
+                              <span className="tnum font-semibold text-spend">−{rupees(totals.cashExpense)}</span>
+                            </div>
+                          ) : null}
+
+                          <div className="flex justify-between bg-brand-50 p-2 rounded-lg font-bold text-brand-800 border border-brand-100">
+                            <span>{totals.cashInHand < 0 ? t("= Outside Money Needed", "= बाहर से लाया गया") : t("= Final Cash Handed Over", "= दिया गया कुल नकद")}</span>
+                            <span className={`tnum text-sm ${totals.cashInHand < 0 ? "text-spend" : "text-brand-700"}`}>{rupees(totals.cashInHand)}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Fee sources detail */}
+                      <div className="rounded-xl border border-hairline bg-white p-3 space-y-1.5 text-xs">
+                        <p className="text-[11px] font-bold uppercase tracking-wide text-ink-soft">{t("Fee Details", "फीस विवरण")}</p>
+                        {entry.uoloReceiving > 0 ? <Line label={t("Uolo fees", "Uolo फीस")} value={entry.uoloReceiving} /> : null}
+                        {entry.offlineReceiving > 0 ? <Line label={t("Offline fees", "ऑफ़लाइन फीस")} value={entry.offlineReceiving} /> : null}
+                        {entry.principalReceiving > 0 ? (
+                          <Line label={t("Principal / Director", "प्रिंसिपल / डायरेक्टर")} value={entry.principalReceiving} />
+                        ) : null}
+                      </div>
 
                       {entry.expenses.length ? (
-                        <div className="!mt-3 border-t border-hairline pt-2">
+                        <div className="rounded-xl border border-hairline bg-white p-3">
                           <p className="text-xs font-bold uppercase text-ink-soft">{t("Expenses", "खर्च")}</p>
-                          <ul className="mt-1 space-y-1">
+                          <ul className="mt-2 space-y-1.5">
                             {entry.expenses.map((e, i) => (
-                              <li key={i} className="flex items-baseline justify-between gap-3 text-sm">
+                              <li key={i} className="flex items-baseline justify-between gap-3 text-xs border-b border-hairline/40 pb-1 last:border-0 last:pb-0">
                                 <span className="text-ink">
                                   {e.reason}
-                                  <span className="ml-1.5 text-xs text-ink-soft">
+                                  <span className="ml-1.5 text-[11px] text-ink-soft">
                                     ({catLabel(e.category, lang === "hi")} ·{" "}
                                     {lang === "hi"
                                       ? PAID_FROM.find((p) => p.value === e.paidFrom)?.hi
