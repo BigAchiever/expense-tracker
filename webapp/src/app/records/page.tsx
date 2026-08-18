@@ -114,6 +114,7 @@ export default async function RecordsPage(props: RecordsPageProps) {
       <main className="mx-auto w-full max-w-5xl flex-1 px-3 pb-16 pt-3 lg:pb-8">
         <RecordsPanel
           school={activeSchool}
+          schools={schools}
           date={date}
           records={records}
           configured={recordsPasswordIsSet()}

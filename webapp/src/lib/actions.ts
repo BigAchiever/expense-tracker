@@ -233,10 +233,12 @@ export async function unlockRecordsAction(
   }
 
   revalidatePath("/");
+  revalidatePath("/records");
   return { ok: true };
 }
 
 export async function lockRecordsAction(): Promise<void> {
   await lockRecords();
   revalidatePath("/");
+  revalidatePath("/records");
 }

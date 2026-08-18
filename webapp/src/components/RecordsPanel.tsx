@@ -25,40 +25,23 @@ const catLabel = (v: string, hi: boolean) => {
 
 export function RecordsPanel({
   school,
+  schools,
   date,
   records,
   configured,
 }: {
   school: School;
+  schools?: School[];
   date: string;
   records: RecordsData | null;
   configured: boolean;
 }) {
-  const t = useT();
-
   return (
-    <section id="records" className="mt-8 scroll-mt-14 border-t border-hairline pt-6">
-      <div className="mb-4 flex items-center gap-2">
-        <svg
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          className="text-ink-soft"
-          aria-hidden
-        >
-          <rect x="3" y="11" width="18" height="11" rx="2" />
-          <path d="M7 11V7a5 5 0 0110 0v4" />
-        </svg>
-        <h2 className="text-lg font-bold text-ink">{t("Records", "रिकॉर्ड")}</h2>
-      </div>
-
+    <section id="records" className="space-y-4">
       {records ? (
-        <Unlocked school={school} date={date} records={records} />
+        <Unlocked school={school} schools={schools} date={date} records={records} />
       ) : (
-        <Locked date={date} schoolId={school.id} configured={configured} />
+        <Locked date={date} schoolId={school.id} schools={schools} configured={configured} />
       )}
     </section>
   );
@@ -69,14 +52,17 @@ export function RecordsPanel({
 function Locked({
   date,
   schoolId,
+  schools,
   configured,
 }: {
   date: string;
   schoolId: string;
+  schools?: School[];
   configured: boolean;
 }) {
   const t = useT();
   const { lang } = useLang();
+  const router = useRouter();
   const [state, formAction, pending] = useActionState<ActionResult | null, FormData>(
     unlockRecordsAction,
     null,
@@ -100,6 +86,28 @@ function Locked({
 
   return (
     <div className="rounded-2xl border border-hairline bg-white p-5 shadow-sm sm:p-6">
+      {schools && schools.length > 1 ? (
+        <div className="mb-4 flex items-center justify-between rounded-xl bg-slate-100 p-1">
+          <span className="text-xs font-bold uppercase tracking-wider text-ink-soft pl-2">
+            {t("School", "स्कूल")}
+          </span>
+          <div className="flex rounded-lg bg-white/60 p-0.5">
+            {schools.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                onClick={() => router.push(`/records?date=${date}&school=${s.id}`)}
+                className={`rounded-md px-3 py-1.5 text-xs font-bold transition ${
+                  s.id === schoolId ? "bg-white text-brand-700 shadow-sm" : "text-ink-soft"
+                }`}
+              >
+                {s.code === "higher" ? t("Higher", "उच्च") : t("Senior", "वरिष्ठ")}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       <p className="text-sm text-ink-soft">
         {t(
           "Past entries, totals and the cash position are kept private. Enter the password to look at them.",
@@ -138,7 +146,17 @@ function Locked({
 
 // ---------------------------------------------------------------------------
 
-function Unlocked({ school, date, records }: { school: School; date: string; records: RecordsData }) {
+function Unlocked({
+  school,
+  schools,
+  date,
+  records,
+}: {
+  school: School;
+  schools?: School[];
+  date: string;
+  records: RecordsData;
+}) {
   const t = useT();
   const { lang } = useLang();
   const router = useRouter();
@@ -147,12 +165,14 @@ function Unlocked({ school, date, records }: { school: School; date: string; rec
 
   const schoolName = lang === "hi" ? school.name_hi : school.name;
 
-  // `date` must be carried through. Dropping it made page.tsx fall back to
-  // today, which flipped the OnePage remount key: the teacher's half-filled
-  // form was wiped and silently repointed at a different day.
   const goMonth = (month: string) =>
     startTransition(() => {
-      router.push(`/?date=${date}&school=${school.id}&month=${month}#records`);
+      router.push(`/records?date=${date}&school=${school.id}&month=${month}`);
+    });
+
+  const goSchool = (schoolId: string) =>
+    startTransition(() => {
+      router.push(`/records?date=${date}&school=${schoolId}&month=${records.month}`);
     });
 
   const shareText = useMemo(
@@ -170,6 +190,30 @@ function Unlocked({ school, date, records }: { school: School; date: string; rec
 
   return (
     <div className="space-y-4">
+      {/* School switcher if schools is provided */}
+      {schools && schools.length > 1 ? (
+        <div className="flex items-center justify-between rounded-2xl border border-hairline bg-white p-2.5 shadow-sm">
+          <span className="text-xs font-bold uppercase tracking-wider text-ink-soft pl-2">
+            {t("School", "स्कूल")}
+          </span>
+          <div className="flex rounded-xl bg-slate-100 p-1">
+            {schools.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                disabled={pending}
+                onClick={() => goSchool(s.id)}
+                className={`rounded-lg px-3.5 py-1.5 text-xs font-bold transition ${
+                  s.id === school.id ? "bg-white text-brand-700 shadow-sm" : "text-ink-soft hover:text-ink"
+                } ${pending ? "cursor-not-allowed" : ""}`}
+              >
+                {s.code === "higher" ? t("Higher Secondary", "उच्चतर माध्यमिक") : t("Senior Secondary", "वरिष्ठ माध्यमिक")}
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null}
+
       {/* The month's collection — the number worth knowing */}
       <div className="rounded-2xl bg-brand-600 p-5 text-white shadow-sm">
         <div className="flex items-start justify-between gap-4">
