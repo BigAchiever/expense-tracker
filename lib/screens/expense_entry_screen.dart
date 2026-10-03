@@ -98,6 +98,8 @@ class _ExpenseEntryScreenState extends State<ExpenseEntryScreen> {
   final _asReceivingController = TextEditingController();
   final _bankDepositController = TextEditingController();
   final _cashExpenseController = TextEditingController();
+  final _bankExpenseController = TextEditingController();
+  final _externalExpenseController = TextEditingController();
   final _reasonController = TextEditingController();
 
   DateTime _selectedDate = DateTime.now();
@@ -150,6 +152,8 @@ class _ExpenseEntryScreenState extends State<ExpenseEntryScreen> {
     _asReceivingController.text = _formatValue(entry.asReceiving);
     _bankDepositController.text = _formatValue(entry.bankDeposit);
     _cashExpenseController.text = _formatValue(entry.cashExpense);
+    _bankExpenseController.text = _formatValue(entry.bankExpense);
+    _externalExpenseController.text = _formatValue(entry.externalExpense);
     _reasonController.text = entry.reasonOfExpense;
   }
 
@@ -179,7 +183,11 @@ class _ExpenseEntryScreenState extends State<ExpenseEntryScreen> {
       asReceiving: _parseValue(_asReceivingController.text),
       bankDeposit: _parseValue(_bankDepositController.text),
       cashExpense: _parseValue(_cashExpenseController.text),
+      bankExpense: _parseValue(_bankExpenseController.text),
+      externalExpense: _parseValue(_externalExpenseController.text),
       totalReceiving: _calculatedTotal,
+      cashReceived: _calculatedCashReceived,
+      totalExpense: _calculatedTotalExpense,
       cashInhand: _calculatedCashInHand,
       reasonOfExpense: _reasonController.text,
       existsInSheet: _currentEntry?.existsInSheet ?? false,
@@ -255,9 +263,18 @@ class _ExpenseEntryScreenState extends State<ExpenseEntryScreen> {
         _parseValue(_asReceivingController.text);
   }
 
+  double get _calculatedCashReceived {
+    return _calculatedTotal - _parseValue(_onlineReceivingController.text);
+  }
+
+  double get _calculatedTotalExpense {
+    return _parseValue(_cashExpenseController.text) +
+        _parseValue(_bankExpenseController.text) +
+        _parseValue(_externalExpenseController.text);
+  }
+
   double get _calculatedCashInHand {
-    return _calculatedTotal -
-        _parseValue(_onlineReceivingController.text) -
+    return _calculatedCashReceived -
         _parseValue(_bankDepositController.text) -
         _parseValue(_cashExpenseController.text);
   }
@@ -270,6 +287,8 @@ class _ExpenseEntryScreenState extends State<ExpenseEntryScreen> {
     _asReceivingController.dispose();
     _bankDepositController.dispose();
     _cashExpenseController.dispose();
+    _bankExpenseController.dispose();
+    _externalExpenseController.dispose();
     _reasonController.dispose();
     super.dispose();
   }
@@ -393,17 +412,15 @@ class _ExpenseEntryScreenState extends State<ExpenseEntryScreen> {
                           }
                         }
                         if (_currentStep == 5) {
-                          final cashExpense = _parseValue(
-                            _cashExpenseController.text,
-                          );
-                          if (cashExpense > 0 &&
+                          final totalExp = _calculatedTotalExpense;
+                          if (totalExp > 0 &&
                               _reasonController.text.trim().isEmpty) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
                                 content: Text(
                                   _t(
-                                    'Reason of expense is required if Cash Expense is filled',
-                                    'नकद खर्च भरने पर खर्च का कारण बताना आवश्यक है',
+                                    'Reason of expense is required when expenses are entered',
+                                    'खर्च भरने पर खर्च का कारण बताना आवश्यक है',
                                   ),
                                 ),
                                 backgroundColor: AppTheme.errorColor,
@@ -602,17 +619,17 @@ class _ExpenseEntryScreenState extends State<ExpenseEntryScreen> {
                             onChanged: (_) => setState(() {}),
                           ),
                         ),
-                        // Step 5: Transactions
+                        // Step 5: Transactions & Expenses
                         Step(
                           isActive: _currentStep >= 5,
                           title: Text(
-                            _t('Transactions', 'लेन-देन'),
+                            _t('Expenses & Transactions', 'खर्च और लेन-देन'),
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           subtitle: Text(
                             _t(
-                              'Bank deposit and cash expenses',
-                              'बैंक में जमा और नकद खर्च',
+                              'Bank deposit and categorized expenses',
+                              'बैंक जमा और अलग-अलग प्रकार के खर्च',
                             ),
                           ),
                           content: Column(
@@ -630,10 +647,41 @@ class _ExpenseEntryScreenState extends State<ExpenseEntryScreen> {
                               ),
                               const SizedBox(height: 12),
                               NumericInputField(
-                                label: _t('Cash Expense', 'नकद खर्च'),
+                                label: _t(
+                                  'Expense: Daily In-Hand Cash',
+                                  'खर्च: दैनिक हाथ के नकद से',
+                                ),
                                 controller: _cashExpenseController,
-                                icon: Icons.money_off,
+                                icon: Icons.point_of_sale,
                                 iconColor: AppTheme.expenseColor,
+                                readOnly:
+                                    !_isEditMode &&
+                                    _currentEntry?.existsInSheet == true,
+                                onChanged: (_) => setState(() {}),
+                              ),
+                              const SizedBox(height: 12),
+                              NumericInputField(
+                                label: _t(
+                                  'Expense: From Bank / Online',
+                                  'खर्च: बैंक / ऑनलाइन द्वारा',
+                                ),
+                                controller: _bankExpenseController,
+                                icon: Icons.account_balance,
+                                iconColor: Colors.blueAccent,
+                                readOnly:
+                                    !_isEditMode &&
+                                    _currentEntry?.existsInSheet == true,
+                                onChanged: (_) => setState(() {}),
+                              ),
+                              const SizedBox(height: 12),
+                              NumericInputField(
+                                label: _t(
+                                  'Expense: External Cash (Sir / Outside)',
+                                  'खर्च: बाहरी नकद से (सर / व्यक्तिगत)',
+                                ),
+                                controller: _externalExpenseController,
+                                icon: Icons.person_outline,
+                                iconColor: Colors.purple,
                                 readOnly:
                                     !_isEditMode &&
                                     _currentEntry?.existsInSheet == true,
@@ -875,9 +923,22 @@ class _ExpenseEntryScreenState extends State<ExpenseEntryScreen> {
               _bankDepositController.text,
             ),
             _buildSummaryRow(
-              _t('Cash Expense', 'नकद खर्च'),
+              _t('Expense (Daily Cash)', 'खर्च (दैनिक नकद से)'),
               _cashExpenseController.text,
             ),
+            _buildSummaryRow(
+              _t('Expense (Bank/Online)', 'खर्च (बैंक / ऑनलाइन से)'),
+              _bankExpenseController.text,
+            ),
+            _buildSummaryRow(
+              _t('Expense (External Cash)', 'खर्च (बाहरी नकद / सर से)'),
+              _externalExpenseController.text,
+            ),
+            if (_calculatedTotalExpense > 0)
+              _buildSummaryRow(
+                _t('Total Expenses', 'कुल खर्च'),
+                numberFormat.format(_calculatedTotalExpense),
+              ),
             if (_reasonController.text.isNotEmpty)
               Padding(
                 padding: const EdgeInsets.only(top: 8.0),
@@ -891,16 +952,28 @@ class _ExpenseEntryScreenState extends State<ExpenseEntryScreen> {
               ),
             const Divider(height: 24),
             CalculatedField(
-              label: _t('Total Receiving Today', 'कुल प्राप्त'),
+              label: _t('Total Collected Today', 'कुल प्राप्त'),
               value: numberFormat.format(_calculatedTotal),
               icon: Icons.trending_up,
               valueColor: AppTheme.incomeColor,
             ),
+            if (_parseValue(_onlineReceivingController.text) > 0) ...[
+              const SizedBox(height: 8),
+              CalculatedField(
+                label: _t('Actual Cash Received', 'नकद में प्राप्त'),
+                value: numberFormat.format(_calculatedCashReceived),
+                icon: Icons.payments_outlined,
+                valueColor: AppTheme.incomeColor,
+              ),
+            ],
             const SizedBox(height: 12),
             CalculatedField(
-              label: _t('Cash In Hand Today', 'नकद हाथ में'),
+              label: _t('Cash to Hand Over Today', 'नकद हाथ में (जमा करने योग्य)'),
               value: numberFormat.format(_calculatedCashInHand),
               icon: Icons.wallet,
+              valueColor: _calculatedCashInHand < 0
+                  ? AppTheme.errorColor
+                  : AppTheme.primaryColor,
             ),
           ],
         ),

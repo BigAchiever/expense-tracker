@@ -4,8 +4,7 @@ import '../config/sheets_config.dart';
 import '../models/expense_entry.dart';
 import '../models/school.dart';
 
-/// Service for interacting with Google Sheets.
-/// Supports multiple schools (spreadsheets) via per-school caching.
+/// Service for interacting with Google Sheets using a Single Master Sheet per school.
 class SheetsService {
   /// Shared GSheets instance (credentials are the same for all schools).
   static GSheets? _gsheets;
@@ -36,42 +35,84 @@ class SheetsService {
     return s;
   }
 
-  /// Gets the worksheet for a specific month.
-  /// If it doesn't exist, it creates it and adds headers.
-  Future<Worksheet> getMonthlySheet(DateTime date) async {
+  /// Gets or creates the single master worksheet.
+  Future<Worksheet> getMasterSheet() async {
     if (_spreadsheets[school] == null) await init();
 
-    final sheetName = DateFormat('MMMM yyyy').format(date);
-    var worksheet = _spreadsheet.worksheetByTitle(sheetName);
+    // 1. Check for dedicated master sheet name
+    var worksheet = _spreadsheet.worksheetByTitle(SheetsConfig.masterWorksheetTitle);
+
+    // 2. If not found, check first worksheet (or create one)
     if (worksheet == null) {
-      worksheet = await _spreadsheet.addWorksheet(sheetName);
-      await worksheet.values.insertRow(1, [
-        'Date', 'Offline Receiv.', 'Uolo Receiv.', 'A/S Recieve',
-        'Total Receiv.', 'Online Receiv.', 'Bank Deposit', 'Cash Expense',
-        'Cash Inhand', 'Reason of Expense',
-      ]);
+      if (_spreadsheet.sheets.isNotEmpty) {
+        worksheet = _spreadsheet.sheets.first;
+      } else {
+        worksheet = await _spreadsheet.addWorksheet(SheetsConfig.masterWorksheetTitle);
+      }
     }
+
+    // Ensure headers exist
+    final rowCount = (await worksheet.values.allRows()).length;
+    if (rowCount == 0) {
+      await worksheet.values.insertRow(1, SheetsConfig.standardHeaders);
+    }
+
     return worksheet;
   }
 
+  /// Maps header strings to 0-based column indices dynamically.
+  Map<String, int> _buildColumnMap(List<String> headerRow) {
+    final map = <String, int>{};
+    for (int i = 0; i < headerRow.length; i++) {
+      final h = headerRow[i].trim().toLowerCase();
+      if (h.isEmpty) continue;
+
+      if (h.contains('date')) {
+        map['date'] = i;
+      } else if (h.contains('offline')) {
+        map['offline'] = i;
+      } else if (h.contains('uolo')) {
+        map['uolo'] = i;
+      } else if (h.contains('online') || h.contains('paytm')) {
+        map['online'] = i;
+      } else if (h.contains('bank') && h.contains('deposit')) {
+        map['deposit'] = i;
+      } else if (h.contains('bank') && h.contains('expense')) {
+        map['bank_expense'] = i;
+      } else if ((h.contains('external') || h.contains('outside')) && h.contains('expense')) {
+        map['external_expense'] = i;
+      } else if (h.contains('total') && h.contains('expense')) {
+        map['total_expense'] = i;
+      } else if (h.contains('expense')) {
+        map['expense'] = i; // Daily in-hand cash expense
+      } else if (h.contains('reason')) {
+        map['reason'] = i;
+      } else if (h.contains('cash') && (h.contains('inhand') || h.contains('hand') || h.contains('over'))) {
+        map['inhand'] = i;
+      } else if (h.contains('cash') && h.contains('received')) {
+        map['cash_received'] = i;
+      } else if (h.contains('total')) {
+        map['total'] = i;
+      } else if ((h.contains('principal') || h.contains('director') || h.contains('a/s') || h.contains('sir')) && !h.contains('cash')) {
+        map['principal'] = i;
+      }
+    }
+    return map;
+  }
+
   /// Parses a date string flexibly from the sheet.
-  /// Handles many formats: dd-MMM-yyyy, dd/MM/yyyy, dd-MM-yyyy, etc.
-  /// Also handles native Google Sheets serial dates (like "46103").
-  /// Falls back to extracting 3 numbers from the string.
   DateTime? _parseDateSafely(String dateStr) {
     dateStr = dateStr.trim();
     if (dateStr.isEmpty) return null;
 
-    // 1. Check if it's a Google Sheets serial date (e.g. "46103")
-    // Sheets dates are counted as days since December 30, 1899.
+    // 1. Google Sheets serial date (e.g. "46103")
     final serialNum = int.tryParse(dateStr);
     if (serialNum != null && serialNum > 30000 && serialNum < 80000) {
-      // Create date at UTC to avoid timezone/daylight savings shifts on boundaries
       final date = DateTime.utc(1899, 12, 30).add(Duration(days: serialNum));
       return DateTime(date.year, date.month, date.day);
     }
 
-    // 2. Try standard DateFormat patterns
+    // 2. Standard DateFormat patterns
     const formats = [
       'dd-MMM-yyyy',
       'd-MMM-yyyy',
@@ -79,11 +120,7 @@ class SheetsService {
       'd-MM-yyyy',
       'dd/MM/yyyy',
       'd/MM/yyyy',
-      'dd/M/yyyy',
-      'd/M/yyyy',
       'yyyy-MM-dd',
-      'MM/dd/yyyy',
-      'M/d/yyyy',
       'dd.MM.yyyy',
       'dd MMM yyyy',
       'd MMM yyyy',
@@ -92,11 +129,11 @@ class SheetsService {
     for (final format in formats) {
       try {
         final parsed = DateFormat(format, 'en_US').parseLoose(dateStr);
-        return parsed;
+        return DateTime(parsed.year, parsed.month, parsed.day);
       } catch (_) {}
     }
 
-    // Fallback: extract day/month/year via regex from strings like "22/03/2026"
+    // 3. Fallback numeric regex
     final numericMatch = RegExp(r'(\d{1,2})[/\-\.](\d{1,2}|[a-zA-Z]{3,})[/\-\.](\d{4})').firstMatch(dateStr);
     if (numericMatch != null) {
       final d = int.tryParse(numericMatch.group(1)!);
@@ -105,7 +142,6 @@ class SheetsService {
       
       int? m = int.tryParse(mStr);
       if (m == null) {
-        // Try to parse month name
         const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
         m = months.indexOf(mStr.toLowerCase().substring(0, 3)) + 1;
         if (m == 0) m = null;
@@ -116,41 +152,33 @@ class SheetsService {
       }
     }
 
-    print('[SheetsService] _parseDateSafely FAILED to parse: "$dateStr"');
     return null;
   }
 
-  /// Fetches an entry for a specific date.
-  /// Returns null if the date doesn't exist in the sheet.
+  /// Fetches an entry for a specific date from the master sheet.
   Future<ExpenseEntry?> getEntryByDate(DateTime date) async {
-    final worksheet = await getMonthlySheet(date);
+    final worksheet = await getMasterSheet();
     final rows = await worksheet.values.allRows();
-    if (rows.isEmpty) return null;
+    if (rows.length <= 1) return null;
 
-    // We'll only compare parsed DateTime objects (year, month, day)
+    final columnMap = _buildColumnMap(rows[0]);
+    final dateColIdx = columnMap['date'] ?? 0;
+
     for (int i = 1; i < rows.length; i++) {
       final row = rows[i];
-      if (row.isEmpty || row[0].isEmpty) continue;
+      if (row.isEmpty || dateColIdx >= row.length || row[dateColIdx].isEmpty) continue;
 
-      final cellDateStr = row[0].trim();
+      final cellDateStr = row[dateColIdx].trim();
       final cellDate = _parseDateSafely(cellDateStr);
-
-      if (cellDate == null) {
-        print('[SheetsService] Skipping row ${i+1}: could not parse date "$cellDateStr"');
-        continue;
-      }
+      if (cellDate == null) continue;
 
       if (cellDate.year == date.year &&
           cellDate.month == date.month &&
           cellDate.day == date.day) {
-        print('[SheetsService] Found existing entry for ${date.toIso8601String()} at row ${i + 1} (cell: "$cellDateStr")');
-        return ExpenseEntry.fromRow(row, date, i + 1);
-      } else {
-        print('[SheetsService] Row ${i+1} Date mismatch: sheet=${cellDate.toIso8601String()} target=${date.toIso8601String()}');
+        return ExpenseEntry.fromRow(row, date, i + 1, columnMap: columnMap);
       }
     }
 
-    print('[SheetsService] No entry found for ${date.toIso8601String()} (checked ${rows.length - 1} rows)');
     return null;
   }
 
@@ -160,7 +188,7 @@ class SheetsService {
     return entry != null;
   }
 
-  /// Creates a new entry in the sheet, sorted by date.
+  /// Creates a new entry in the master sheet, placed in chronological date order.
   Future<bool> createEntry(ExpenseEntry entry) async {
     if (await checkDateExists(entry.date)) {
       throw Exception(
@@ -168,15 +196,17 @@ class SheetsService {
       );
     }
 
-    final worksheet = await getMonthlySheet(entry.date);
+    final worksheet = await getMasterSheet();
     final rows = await worksheet.values.allRows();
     int insertRowIndex = rows.length + 1;
 
-    // Find the correct position (dates should be in order)
+    final dateColIdx = rows.isNotEmpty ? (_buildColumnMap(rows[0])['date'] ?? 0) : 0;
+
+    // Find the correct position to maintain date sort order
     for (int i = 1; i < rows.length; i++) {
       final row = rows[i];
-      if (row.isNotEmpty) {
-        final rowDate = _parseDateSafely(row[0]);
+      if (row.isNotEmpty && dateColIdx < row.length) {
+        final rowDate = _parseDateSafely(row[dateColIdx]);
         if (rowDate != null && entry.date.isBefore(rowDate)) {
           insertRowIndex = i + 1;
           break;
@@ -184,73 +214,59 @@ class SheetsService {
       }
     }
 
-    print('[SheetsService] Creating entry for ${entry.date.toIso8601String()} at row $insertRowIndex');
     final rowData = entry.toRow(dateFormat);
     return await worksheet.values.insertRow(insertRowIndex, rowData);
   }
 
-  /// Updates an existing entry in the sheet.
+  /// Updates an existing entry in the master sheet.
   Future<bool> updateEntry(ExpenseEntry entry) async {
     if (!entry.existsInSheet || entry.rowNumber == null) {
       throw Exception('Entry does not exist in sheet or row number unknown');
     }
 
-    final worksheet = await getMonthlySheet(entry.date);
-    final dateFormatter = DateFormat(dateFormat);
+    final worksheet = await getMasterSheet();
+    final rowData = entry.toRow(dateFormat);
 
     final updates = <Future<bool>>[];
-
-    updates.add(worksheet.values.insertValue(
-      dateFormatter.format(entry.date), column: 1, row: entry.rowNumber!));
-    updates.add(worksheet.values.insertValue(
-      entry.offlineReceiving > 0 ? entry.offlineReceiving.toString() : '',
-      column: 2, row: entry.rowNumber!));
-    updates.add(worksheet.values.insertValue(
-      entry.uoloReceiving > 0 ? entry.uoloReceiving.toString() : '',
-      column: 3, row: entry.rowNumber!));
-    updates.add(worksheet.values.insertValue(
-      entry.asReceiving > 0 ? entry.asReceiving.toString() : '',
-      column: 4, row: entry.rowNumber!));
-    updates.add(worksheet.values.insertValue(
-      entry.totalReceiving > 0 ? entry.totalReceiving.toString() : '',
-      column: 5, row: entry.rowNumber!));
-    updates.add(worksheet.values.insertValue(
-      entry.onlineReceiving > 0 ? entry.onlineReceiving.toString() : '',
-      column: 6, row: entry.rowNumber!));
-    updates.add(worksheet.values.insertValue(
-      entry.bankDeposit > 0 ? entry.bankDeposit.toString() : '',
-      column: 7, row: entry.rowNumber!));
-    updates.add(worksheet.values.insertValue(
-      entry.cashExpense > 0 ? entry.cashExpense.toString() : '',
-      column: 8, row: entry.rowNumber!));
-    updates.add(worksheet.values.insertValue(
-      entry.cashInhand != 0 ? entry.cashInhand.toString() : '',
-      column: 9, row: entry.rowNumber!));
-    updates.add(worksheet.values.insertValue(
-      entry.reasonOfExpense, column: 10, row: entry.rowNumber!));
+    for (int col = 0; col < rowData.length; col++) {
+      updates.add(worksheet.values.insertValue(
+        rowData[col],
+        column: col + 1,
+        row: entry.rowNumber!,
+      ));
+    }
 
     final results = await Future.wait(updates);
     return results.every((r) => r);
   }
 
-  /// Gets all entries for a specific month.
+  /// Gets all entries for a specific month from the master sheet.
   Future<List<ExpenseEntry>> getMonthlyEntries(DateTime monthDate) async {
-    final worksheet = await getMonthlySheet(monthDate);
+    final worksheet = await getMasterSheet();
     final rows = await worksheet.values.allRows();
     if (rows.length <= 1) return [];
+
+    final columnMap = _buildColumnMap(rows[0]);
+    final dateColIdx = columnMap['date'] ?? 0;
 
     final entries = <ExpenseEntry>[];
     for (int i = 1; i < rows.length; i++) {
       final row = rows[i];
-      if (row.isNotEmpty && row[0].trim().isNotEmpty) {
-        final date = _parseDateSafely(row[0]);
-        if (date != null) entries.add(ExpenseEntry.fromRow(row, date, i + 1));
+      if (row.isNotEmpty && dateColIdx < row.length && row[dateColIdx].trim().isNotEmpty) {
+        final date = _parseDateSafely(row[dateColIdx]);
+        if (date != null &&
+            date.year == monthDate.year &&
+            date.month == monthDate.month) {
+          entries.add(ExpenseEntry.fromRow(row, date, i + 1, columnMap: columnMap));
+        }
       }
     }
+
+    entries.sort((a, b) => a.date.compareTo(b.date));
     return entries;
   }
 
-  /// Gets the previous day's entry for balance calculations.
+  /// Gets the previous day's entry for balance references if needed.
   Future<ExpenseEntry?> getPreviousDayEntry(DateTime date) async {
     final previousDay = date.subtract(const Duration(days: 1));
     try {

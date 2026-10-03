@@ -62,7 +62,9 @@ class ExpenseRepository {
         entry.uoloReceiving < 0 ||
         entry.asReceiving < 0 ||
         entry.bankDeposit < 0 ||
-        entry.cashExpense < 0) {
+        entry.cashExpense < 0 ||
+        entry.bankExpense < 0 ||
+        entry.externalExpense < 0) {
       throw ValidationException('Values cannot be negative');
     }
 
